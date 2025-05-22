@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Page Replacement Simulator</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .control-panel {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #34495e;
+        }
+        input, select, button {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .results {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .algorithm-result {
+            flex: 1;
+            background-color: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .fault-count {
+            font-size: 24px;
+            font-weight: bold;
+            color: #e74c3c;
+            margin: 10px 0;
+        }
+        .reference-string {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-family: monospace;
+        }
+        .simulation-steps {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #eee;
+            padding: 10px;
+            background-color: white;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .step {
+            margin-bottom: 5px;
+            padding: 3px;
+        }
+        .fault {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+        .summary {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #e8f5e9;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Page Replacement Algorithm Simulator</h1>
+    
+    <div class="control-panel">
+        <div class="input-group">
+            <label for="numFrames">Number of Page Frames:</label>
+            <input type="number" id="numFrames" min="1" max="10" value="3">
+        </div>
+        
+        <div class="input-group">
+            <label for="refLength">Reference String Length:</label>
+            <input type="number" id="refLength" min="5" max="50" value="20">
+        </div>
+        
+        <div class="input-group">
+            <label for="refString">Or enter custom reference string (comma-separated):</label>
+            <input type="text" id="refString" placeholder="e.g. 1,2,3,4,1,2,5,1,2,3,4,5">
+        </div>
+        
+        <button id="runBtn">Run Simulation</button>
+        <button id="randomBtn">Generate Random</button>
+    </div>
+    
+    <div id="resultsContainer" style="display: none;">
+        <div class="reference-string">
+            <strong>Reference String:</strong> <span id="refStringDisplay"></span>
+        </div>
+        
+        <div class="results">
+            <div class="algorithm-result" id="fifoResult">
+                <h3>FIFO</h3>
+                <div class="fault-count">Faults: <span id="fifoFaults">0</span></div>
+                <div class="simulation-steps" id="fifoSteps"></div>
+            </div>
+            
+            <div class="algorithm-result" id="lruResult">
+                <h3>LRU</h3>
+                <div class="fault-count">Faults: <span id="lruFaults">0</span></div>
+                <div class="simulation-steps" id="lruSteps"></div>
+            </div>
+            
+            <div class="algorithm-result" id="optResult">
+                <h3>OPT</h3>
+                <div class="fault-count">Faults: <span id="optFaults">0</span></div>
+                <div class="simulation-steps" id="optSteps"></div>
+            </div>
+        </div>
+        
+        <div class="summary">
+            <h3>Summary</h3>
+            <p>FIFO Faults: <span id="summaryFifo">0</span></p>
+            <p>LRU Faults: <span id="summaryLru">0</span></p>
+            <p>OPT Faults: <span id="summaryOpt">0</span></p>
+            <p><strong>Best algorithm:</strong> <span id="bestAlgo">-</span></p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const runBtn = document.getElementById('runBtn');
+            const randomBtn = document.getElementById('randomBtn');
+            const numFramesInput = document.getElementById('numFrames');
+            const refLengthInput = document.getElementById('refLength');
+            const refStringInput = document.getElementById('refString');
+            
+            randomBtn.addEventListener('click', function() {
+                const length = parseInt(refLengthInput.value);
+                const randomString = generateReferenceString(length).join(', ');
+                refStringInput.value = randomString;
+            });
+            
+            runBtn.addEventListener('click', function() {
+                const numFrames = parseInt(numFramesInput.value);
+                let refString;
+                
+                if (refStringInput.value.trim() !== '') {
+                    refString = refStringInput.value.split(',').map(num => parseInt(num.trim()));
+                } else {
+                    refString = generateReferenceString(parseInt(refLengthInput.value));
+                }
+                
+                runSimulation(numFrames, refString);
+            });
+            
+            function generateReferenceString(length) {
+                const refString = [];
+                for (let i = 0; i < length; i++) {
+                    refString.push(Math.floor(Math.random() * 10)); // Pages 0-9
+                }
+                return refString;
+            }
+            
+            function runSimulation(numFrames, refString) {
+                // Display reference string
+                document.getElementById('refStringDisplay').textContent = refString.join(', ');
+                
+                // Run algorithms
+                const fifoResult = fifo([...refString], numFrames);
+                const lruResult = lru([...refString], numFrames);
+                const optResult = opt([...refString], numFrames);
+                
+                // Display results
+                displayResults('fifo', fifoResult);
+                displayResults('lru', lruResult);
+                displayResults('opt', optResult);
+                
+                // Show summary
+                document.getElementById('summaryFifo').textContent = fifoResult.faults;
+                document.getElementById('summaryLru').textContent = lruResult.faults;
+                document.getElementById('summaryOpt').textContent = optResult.faults;
+                
+                // Find best algorithm
+                const results = [
+                    { name: 'FIFO', faults: fifoResult.faults },
+                    { name: 'LRU', faults: lruResult.faults },
+                    { name: 'OPT', faults: optResult.faults }
+                ];
+                const best = results.reduce((min, r) => r.faults < min.faults ? r : min);
+                document.getElementById('bestAlgo').textContent = `${best.name} (${best.faults} faults)`;
+                
+                // Show results container
+                document.getElementById('resultsContainer').style.display = 'block';
+            }
+            
+            function displayResults(algorithm, result) {
+                document.getElementById(`${algorithm}Faults`).textContent = result.faults;
+                const stepsContainer = document.getElementById(`${algorithm}Steps`);
+                stepsContainer.innerHTML = '';
+                
+                result.steps.forEach(step => {
+                    const stepElement = document.createElement('div');
+                    stepElement.className = `step ${step.isFault ? 'fault' : ''}`;
+                    stepElement.textContent = step.text;
+                    stepsContainer.appendChild(stepElement);
+                });
+            }
+            
+            // FIFO Implementation
+            function fifo(refString, numFrames) {
+                const frames = [];
+                let faults = 0;
+                let pointer = 0;
+                const steps = [];
+                
+                for (let i = 0; i < refString.length; i++) {
+                    const page = refString[i];
+                    const isFault = !frames.includes(page);
+                    
+                    if (isFault) {
+                        faults++;
+                        
+                        if (frames.length < numFrames) {
+                            frames.push(page);
+                        } else {
+                            frames[pointer] = page;
+                            pointer = (pointer + 1) % numFrames;
+                        }
+                    }
+                    
+                    steps.push({
+                        text: `Page ${page} → Frames: [${frames.join(', ')}]${isFault ? ' (FAULT)' : ''}`,
+                        isFault: isFault
+                    });
+                }
+                
+                return { faults, steps };
+            }
+            
+            // LRU Implementation
+            function lru(refString, numFrames) {
+                const frames = [];
+                const lastUsed = {};
+                let faults = 0;
+                let time = 0;
+                const steps = [];
+                
+                for (let i = 0; i < refString.length; i++) {
+                    const page = refString[i];
+                    time++;
+                    const isFault = !frames.includes(page);
+                    
+                    if (isFault) {
+                        faults++;
+                        
+                        if (frames.length < numFrames) {
+                            frames.push(page);
+                        } else {
+                            let lruPage = frames[0];
+                            let minTime = lastUsed[lruPage];
+                            
+                            for (const framePage of frames) {
+                                if (lastUsed[framePage] < minTime) {
+                                    minTime = lastUsed[framePage];
+                                    lruPage = framePage;
+                                }
+                            }
+                            
+                            const index = frames.indexOf(lruPage);
+                            frames[index] = page;
+                        }
+                    }
+                    
+                    lastUsed[page] = time;
+                    steps.push({
+                        text: `Page ${page} → Frames: [${frames.join(', ')}]${isFault ? ' (FAULT)' : ''}`,
+                        isFault: isFault
+                    });
+                }
+                
+                return { faults, steps };
+            }
+            
+            // OPT Implementation
+            function opt(refString, numFrames) {
+                const frames = [];
+                let faults = 0;
+                const steps = [];
+                
+                for (let i = 0; i < refString.length; i++) {
+                    const page = refString[i];
+                    const isFault = !frames.includes(page);
+                    
+                    if (isFault) {
+                        faults++;
+                        
+                        if (frames.length < numFrames) {
+                            frames.push(page);
+                        } else {
+                            let farthest = i;
+                            let replaceIndex = 0;
+                            
+                            for (let j = 0; j < frames.length; j++) {
+                                const framePage = frames[j];
+                                let k;
+                                
+                                for (k = i + 1; k < refString.length; k++) {
+                                    if (refString[k] === framePage) break;
+                                }
+                                
+                                if (k === refString.length) {
+                                    replaceIndex = j;
+                                    break;
+                                }
+                                
+                                if (k > farthest) {
+                                    farthest = k;
+                                    replaceIndex = j;
+                                }
+                            }
+                            
+                            frames[replaceIndex] = page;
+                        }
+                    }
+                    
+                    steps.push({
+                        text: `Page ${page} → Frames: [${frames.join(', ')}]${isFault ? ' (FAULT)' : ''}`,
+                        isFault: isFault
+                    });
+                }
+                
+                return { faults, steps };
+            }
+        });
+    </script>
+</body>
+</html>
